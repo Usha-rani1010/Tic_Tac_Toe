@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Tic Tac Toe</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Play Ultimate Tic Tac Toe with AI levels from Easy to Unbeatable. Unlock levels and customize your profile.">
+<meta name="theme-color" content="#4CAF50">
+
+<link rel="icon" href="https://cdn-icons-png.flaticon.com/512/566/566294.png">
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<style>
+:root{
+ --bg:linear-gradient(135deg,#89f7fe,#66a6ff);
+ --card:rgba(255,255,255,0.3);
+ --text:#111;
+ --accent:#4CAF50;
+}
+body.dark{
+ --bg:linear-gradient(135deg,#141e30,#243b55);
+ --card:rgba(255,255,255,0.08);
+ --text:#fff;
+ --accent:#00e676;
+}
+body{
+ margin:0;
+ font-family:Segoe UI;
+ background:var(--bg);
+ color:var(--text);
+ text-align:center;
+ transition:.4s;
+}
+
+/* Sidebar */
+.sidebar{
+ position:fixed;
+ top:15px;
+ left:15px;
+}
+.avatar{
+ width:70px;
+ height:70px;
+ border-radius:50%;
+ border:3px solid var(--accent);
+ cursor:pointer;
+}
+.dashboard{
+ display:none;
+ margin-top:10px;
+ padding:15px;
+ border-radius:15px;
+ background:var(--card);
+ backdrop-filter:blur(10px);
+ width:230px;
+ text-align:left;
+}
+.dashboard button{
+ width:100%;
+ margin:5px 0;
+ padding:7px;
+ border:none;
+ border-radius:8px;
+ background:var(--accent);
+ color:white;
+ cursor:pointer;
+}
+.locked{
+ background:#555 !important;
+ cursor:not-allowed;
+}
+
+.board{
+ margin-top:120px;
+ display:grid;
+ grid-template-columns:repeat(3,100px);
+ gap:10px;
+ justify-content:center;
+}
+.cell{
+ width:100px;
+ height:100px;
+ font-size:42px;
+ background:var(--card);
+ border-radius:15px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ cursor:pointer;
+ transition:.2s;
+}
+.cell:hover{
+ background:var(--accent);
+ color:white;
+ transform:scale(1.05);
+}
+
+.trophy{
+ position:fixed;
+ top:20px;
+ right:20px;
+ background:gold;
+ padding:10px 15px;
+ border-radius:10px;
+ font-weight:bold;
+ display:none;
+ animation:pop .4s ease;
+}
+@keyframes pop{
+ 0%{transform:scale(0);}
+ 100%{transform:scale(1);}
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+ <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=1" class="avatar" onclick="toggleDashboard()">
+
+ <div class="dashboard" id="dashboard">
+  <h3>👤 Profile</h3>
+  ⭐ Wins: <span id="dwins">0</span><br>
+  💀 Loss: <span id="dloss">0</span><br>
+  🤝 Draw: <span id="ddraw">0</span><br>
+  🏆 Highest Level: <span id="highestLevel">1</span><br><br>
+
+  <b>🎯 Select Level</b><br>
+  <button onclick="setLevel(1)" id="lvl1">Easy</button>
+  <button onclick="setLevel(2)" id="lvl2" class="locked">🔒 Medium</button>
+  <button onclick="setLevel(3)" id="lvl3" class="locked">🔒 Hard</button>
+  <button onclick="setLevel(4)" id="lvl4" class="locked">🔒 Unbeatable</button>
+
+  <button onclick="playAI()">Play AI</button>
+  <button onclick="twoPlayers()">Two Players</button>
+  <button onclick="toggleTheme()">Dark / Light</button>
+  <button onclick="resetProfile()">🔄 Reset Profile</button>
+ </div>
+</div>
+
+<h1>🎮 Ultimate Tic Tac Toe</h1>
+<p>Unlock levels. Beat the AI. Become unbeatable.</p>
+
+<div class="board" id="board"></div>
+<div class="trophy" id="trophy">🏆 Level Unlocked!</div>
+
+<script>
+let board=["","","","","","","","",""];
+let current="X";
+let aiMode=true;
+let wins=0,loss=0,draw=0;
+let level=1;
+let highestUnlocked=1;
+
+const boardDiv=document.getElementById("board");
+
+/* Unique user */
+if(!localStorage.getItem("userID")){
+ localStorage.setItem("userID","user_"+Date.now());
+}
+const userKey="profile_"+localStorage.getItem("userID");
+
+/* Profile */
+function saveProfile(){
+ localStorage.setItem(userKey,JSON.stringify({
+  avatar:document.querySelector(".avatar").src,
+  wins,loss,draw,highestUnlocked
+ }));
+}
+function loadProfile(){
+ let p=JSON.parse(localStorage.getItem(userKey));
+ if(p){
+  document.querySelector(".avatar").src=p.avatar;
+  wins=p.wins; loss=p.loss; draw=p.draw;
+  highestUnlocked=p.highestUnlocked||1;
+ }
+ updateDashboard();
+}
+function resetProfile(){
+ if(confirm("Reset your progress?")){
+  localStorage.removeItem(userKey);
+  location.reload();
+ }
+}
+
+/* Board */
+function createBoard(){
+ boardDiv.innerHTML="";
+ board.forEach((cell,i)=>{
+  const div=document.createElement("div");
+  div.className="cell";
+  div.innerText=cell;
+  div.onclick=()=>makeMove(i);
+  boardDiv.appendChild(div);
+ });
+}
+createBoard();
+
+function makeMove(i){
+ if(board[i]!="") return;
+ board[i]=current;
+ createBoard();
+
+ if(checkWin(current)){
+  if(current==="X"){
+   wins++;
+   confetti();
+   if(level===highestUnlocked && highestUnlocked<4){
+    highestUnlocked++;
+    showTrophy();
+   }
+  } else loss++;
+  updateDashboard();
+  setTimeout(resetGame,1200);
+  return;
+ }
+
+ if(board.every(c=>c!="")){
+  draw++;
+  updateDashboard();
+  setTimeout(resetGame,1200);
+  return;
+ }
+
+ current=current==="X"?"O":"X";
+ if(aiMode && current==="O") setTimeout(aiMove,400);
+}
+
+function aiMove(){
+ let empty=getEmpty();
+ if(level===1) makeMove(random(empty));
+ else if(level===2) makeMove(findBest("X") ?? random(empty));
+ else if(level===3) makeMove(findBest("O") ?? findBest("X") ?? random(empty));
+ else makeMove(minimaxMove());
+}
+
+function minimaxMove(){
+ let bestScore=-Infinity,move;
+ for(let i=0;i<9;i++){
+  if(board[i]==""){
+   board[i]="O";
+   let score=minimax(0,false);
+   board[i]="";
+   if(score>bestScore){ bestScore=score; move=i; }
+  }
+ }
+ return move;
+}
+function minimax(depth,isMax){
+ if(checkWin("O")) return 10-depth;
+ if(checkWin("X")) return depth-10;
+ if(board.every(c=>c!="")) return 0;
+
+ if(isMax){
+  let best=-Infinity;
+  for(let i=0;i<9;i++){
+   if(board[i]==""){
+    board[i]="O";
+    best=Math.max(best,minimax(depth+1,false));
+    board[i]="";
+   }
+  }
+  return best;
+ }else{
+  let best=Infinity;
+  for(let i=0;i<9;i++){
+   if(board[i]==""){
+    board[i]="X";
+    best=Math.min(best,minimax(depth+1,true));
+    board[i]="";
+   }
+  }
+  return best;
+ }
+}
+
+function findBest(player){
+ const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+ for(let combo of w){
+  let [a,b,c]=combo;
+  if(board[a]==player && board[b]==player && board[c]=="") return c;
+  if(board[a]==player && board[c]==player && board[b]=="") return b;
+  if(board[b]==player && board[c]==player && board[a]=="") return a;
+ }
+ return null;
+}
+
+function random(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function getEmpty(){ return board.map((v,i)=>v==""?i:null).filter(v=>v!=null); }
+
+function checkWin(p){
+ const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+ return w.some(comb=>comb.every(i=>board[i]==p));
+}
+
+function resetGame(){
+ board=["","","","","","","","",""];
+ current="X";
+ createBoard();
+}
+
+function setLevel(lvl){
+ if(lvl>highestUnlocked) return;
+ level=lvl;
+ resetGame();
+}
+
+function updateDashboard(){
+ document.getElementById("dwins").innerText=wins;
+ document.getElementById("dloss").innerText=loss;
+ document.getElementById("ddraw").innerText=draw;
+ document.getElementById("highestLevel").innerText=highestUnlocked;
+
+ const names=["Easy","Medium","Hard","Unbeatable"];
+ for(let i=1;i<=4;i++){
+  let btn=document.getElementById("lvl"+i);
+  if(i<=highestUnlocked){
+   btn.classList.remove("locked");
+   btn.innerText=names[i-1];
+  }else{
+   btn.classList.add("locked");
+   btn.innerText="🔒 "+names[i-1];
+  }
+ }
+ saveProfile();
+}
+
+function showTrophy(){
+ let t=document.getElementById("trophy");
+ t.style.display="block";
+ setTimeout(()=>t.style.display="none",2000);
+}
+
+function toggleDashboard(){
+ let d=document.getElementById("dashboard");
+ d.style.display=d.style.display==="block"?"none":"block";
+}
+function toggleTheme(){ document.body.classList.toggle("dark"); }
+function playAI(){ aiMode=true; resetGame(); }
+function twoPlayers(){ aiMode=false; resetGame(); }
+
+loadProfile();
+</script>
+
+</body>
+</html>
